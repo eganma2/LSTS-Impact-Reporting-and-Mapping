@@ -1,0 +1,160 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LSTS Impact Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: summary tiles first, then one tabbed map card per country, then growth by year, then the numbers as a table. */
+:root{
+  --bg:#F6F6F6; --card:#FFFFFF; --ink:#1A1412; --muted:#6B5E59; --line:#E4DDD8; --edge:#47231B;
+  --health:#FF9F1C; --women:#47231B; --education:#FFCC00; --pending:#C9C2BD; --land:#FBF8F4; --land-line:#B9AEA6; --sea:#E6ECEE; --tab-on:#FF9F1C;
+  --head:'Raleway','Arial',sans-serif; --body:'Source Serif Pro','Source Serif 4',Georgia,serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171110; --card:#211918; --ink:#F6F6F6; --muted:#B9ADA7; --line:#3A2E2B; --edge:#171110;
+  --women:#C98A6C; --pending:#6F625D; --land:#2B211F; --land-line:#5A4A45; --sea:#1B2326; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171110; --card:#211918; --ink:#F6F6F6; --muted:#B9ADA7; --line:#3A2E2B; --edge:#171110;
+  --women:#C98A6C; --pending:#6F625D; --land:#2B211F; --land-line:#5A4A45; --sea:#1B2326; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;margin:0;padding-inline:16px;padding-block:28px 40px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3,.num{font-family:var(--head);margin:0;text-wrap:balance}
+.eyebrow{font-family:var(--head);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:800;font-size:clamp(30px,5vw,44px);line-height:1.05}
+.sub{color:var(--muted);margin:6px 0 0}
+h2{font-weight:800;font-size:22px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.tile .num{font-weight:800;font-size:clamp(24px,3.4vw,32px);line-height:1.1;font-variant-numeric:tabular-nums}
+.tile .lab{font-size:13px;color:var(--muted);margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0}
+.card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{font:700 14px var(--head);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 16px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--tab-on);border-color:var(--tab-on);color:#1A1412}
+.tabs button:focus-visible,.pt:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin:0 0 12px;padding:0;list-style:none}
+.legend li{display:flex;align-items:center;gap:7px}
+.sw{width:12px;height:12px;border-radius:50%;border:1px solid var(--edge);flex:none}
+.country{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:760px){.country{grid-template-columns:minmax(0,1fr)}}
+.mapbox{position:relative;background:var(--sea);border-radius:8px;overflow:hidden}
+.mapbox svg.main{display:block;width:100%;height:auto}
+.inset{position:absolute;left:10px;bottom:10px;width:120px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px}
+.inset svg{display:block;width:100%;height:auto}
+.msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:var(--head);font-weight:700;color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+.stat .num{font-weight:800;font-size:24px;font-variant-numeric:tabular-nums}
+.stat .lab{font-size:13px;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin:14px 0 0}
+.tip{position:fixed;z-index:5;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.35;padding:8px 10px;border-radius:6px;max-width:240px;display:none}
+.tip b{font-family:var(--head)}
+details{margin:0}
+summary{cursor:pointer;font-family:var(--head);font-weight:700}
+.scroll{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-family:var(--head);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.method{font-size:13px;color:var(--muted)}
+.err{padding:24px;text-align:center;color:var(--muted)}
+svg text{font-family:var(--body)}
+.u{font-size:.5em;font-weight:700;margin-left:4px;color:var(--muted)}
+</style>
+</head><body><div class="wrap" id="app" aria-live="polite"><p class="err">Loading impact data…</p></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<script>
+try{var _t=new URLSearchParams(location.search).get('theme');if(_t==='light'||_t==='dark')document.documentElement.setAttribute('data-theme',_t)}catch(e){}
+
+const DATA_URL=(function(){try{return new URLSearchParams(location.search).get('data')||'data.json'}catch(e){return 'data.json'}})();
+const DES=[['health','Solar for Health'],['women','Solar for Women'],['education','Solar for Education'],['pending','Category being confirmed']];
+const COUNTRIES=['Puerto Rico','Haiti','Honduras'];
+const fmt=n=>Math.round(n).toLocaleString('en-US');
+const compact=n=>n>=1e6?(n/1e6).toFixed(2)+'M':fmt(n);
+const unit=(v,u)=>`${v}<span class="u">${u}</span>`;
+const $=id=>document.getElementById(id);
+let D=null,active='Puerto Rico';
+function legend(){return '<ul class="legend">'+DES.map(([k,l])=>`<li><span class="sw" style="background:var(--${k})"></span>${l}</li>`).join('')+'</ul>'}
+function pie(cx,cy,r,c,extra){
+  const tot=DES.reduce((s,[k])=>s+(c[k]||0),0); if(!tot) return '';
+  const parts=DES.filter(([k])=>c[k]>0);
+  if(parts.length===1) return `<circle ${extra} cx="${cx}" cy="${cy}" r="${r}" fill="var(--${parts[0][0]})" stroke="var(--edge)" stroke-width="1.25" vector-effect="non-scaling-stroke"/>`;
+  let a=-Math.PI/2,out=`<g ${extra}>`;
+  parts.forEach(([k])=>{const f=c[k]/tot*2*Math.PI,b=a+f,x1=cx+r*Math.cos(a),y1=cy+r*Math.sin(a),x2=cx+r*Math.cos(b),y2=cy+r*Math.sin(b);
+    out+=`<path d="M${cx} ${cy}L${x1.toFixed(2)} ${y1.toFixed(2)}A${r} ${r} 0 ${f>Math.PI?1:0} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}Z" fill="var(--${k})" stroke="var(--edge)" stroke-width="1.25" vector-effect="non-scaling-stroke"/>`;a=b});
+  return out+'</g>';
+}
+function tipText(title,c){const rows=DES.filter(([k])=>c[k]>0).map(([k,l])=>`${l}: ${c[k]}`).join('<br>');return `<b>${title}</b><br>${rows}`}
+function mapSvg(name){
+  const c=D.countries[name],W=640;
+  if(!c.installations) return `<svg class="main" viewBox="0 0 ${c.w} ${c.h}" role="img" aria-label="Map of ${name}"><path d="${c.path}" fill="var(--land)" stroke="var(--land-line)" stroke-width="1" vector-effect="non-scaling-stroke"/></svg><div class="msg">Verified installations coming soon</div>`;
+  let vb=[0,0,c.w,c.h],marks='',inset='';
+  let rpx=n=>5+2.4*Math.sqrt(n);
+  if(c.areas.length){
+    const xs=c.areas.map(a=>a.x),ys=c.areas.map(a=>a.y),pad=45;
+    rpx=n=>3+1.25*Math.sqrt(n);const bw=Math.max(...xs)-Math.min(...xs)+2*pad,w=Math.max(bw,320),h=w*0.62,cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+    vb=[cx-w/2,cy-h/2,w,h];const u=w/W;
+    c.areas.slice().sort((a,b)=>b.n-a.n).forEach((a,i)=>{
+      marks+=pie(a.x,a.y,rpx(a.n)*u,a,`class="pt" tabindex="0" data-t="${encodeURIComponent(tipText('General area · '+a.n+' installations',a))}" aria-label="General area with ${a.n} installations"`)});
+    inset=`<div class="inset" aria-hidden="true"><svg viewBox="0 0 ${c.w} ${c.h}"><path d="${c.path}" fill="var(--land)" stroke="var(--land-line)" stroke-width="1" vector-effect="non-scaling-stroke"/><rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="none" stroke="var(--ink)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg></div>`;
+  } else {
+    const u=c.w/W;marks=pie(c.cx,c.cy,rpx(c.installations)*u*1.6,c.designation,`class="pt" tabindex="0" data-t="${encodeURIComponent(tipText(name+' · '+c.installations+' installations',c.designation))}" aria-label="${name}: ${c.installations} installations"`);
+  }
+  return `<svg class="main" viewBox="${vb.map(v=>+v.toFixed(1)).join(' ')}" role="img" aria-label="Map of ${name} showing where installations are, in general areas"><path d="${c.path}" fill="var(--land)" stroke="var(--land-line)" stroke-width="1" vector-effect="non-scaling-stroke"/>${marks}</svg>${inset}`;
+}
+function countryPanel(name){
+  const c=D.countries[name];
+  if(!c.installations) return `<div><p class="note" style="margin-top:0">Installations in ${name} will appear here once they are verified.</p></div>`;
+  const stat=(n,l)=>`<div class="stat"><div class="num">${n}</div><div class="lab">${l}</div></div>`;
+  let note=c.areas.length?`Each circle is a general area, not a site location. Areas with fewer than ${D.method.min_group} installations are combined.`+(c.other?` ${c.other} installations in smaller areas are counted in the totals but not mapped.`:''):
+    (c.installations?`Shown at country level to protect the privacy of the communities and sites we serve.`:`This country will appear here once its installations are verified.`);
+  return `<div><div class="stats">${stat(fmt(c.installations),'installations')}${stat(unit(fmt(c.kw),'kW'),'installed capacity')}${stat(unit(compact(c.lifetime_kwh),'kWh'),'estimated generation to date')}${stat(unit(fmt(c.co2_lifetime_t),'t'),'CO₂ avoided to date')}</div><p class="note">${note}</p></div>`;
+}
+function yearChart(){
+  const Y=D.by_year,W=Math.min(640,Math.max(340,$('app').clientWidth-42)),H=250,L=36,R=12,T=24,B=40,pw=W-L-R,ph=H-T-B,max=Math.ceil(Math.max(...Y.map(y=>y.n))/20)*20,bw=Math.min(64,pw/Y.length*0.55);
+  const sy=v=>T+ph-v/max*ph; let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Installations per year, stacked by impact area">`;
+  [0,max/2,max].forEach(t=>{s+=`<line x1="${L}" x2="${W-R}" y1="${sy(t)}" y2="${sy(t)}" stroke="var(--line)"/><text x="${L-8}" y="${sy(t)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${t}</text>`});
+  Y.forEach((y,i)=>{const cx=L+pw*(i+0.5)/Y.length;let acc=0;
+    DES.forEach(([k,l])=>{const v=y[k];if(!v)return;const y0=sy(acc+v),hh=sy(acc)-y0;acc+=v;
+      s+=`<rect class="pt" tabindex="0" x="${cx-bw/2}" y="${y0}" width="${bw}" height="${hh}" fill="var(--${k})" stroke="var(--card)" stroke-width="2" rx="2" data-t="${encodeURIComponent('<b>'+y.label+'</b><br>'+l+': '+v)}" aria-label="${y.label}, ${l}: ${v}"/>`});
+    s+=`<text x="${cx}" y="${sy(y.n)-6}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">${y.n}</text><text x="${cx}" y="${H-T+4}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${y.label}</text>`});
+  return s+'</svg>';
+}
+function table(){
+  const row=(n,c)=>`<tr><td>${n}</td><td>${fmt(c.installations)}</td>${DES.map(([k])=>`<td>${c.designation[k]||0}</td>`).join('')}<td>${fmt(c.kw)}</td></tr>`;
+  const head=`<tr><th>Country</th><th>Installations</th>${DES.map(([,l])=>`<th>${l}</th>`).join('')}<th>kW</th></tr>`;
+  const t=D.totals;
+  return `<div class="scroll"><table><thead>${head}</thead><tbody>${COUNTRIES.map(n=>row(n,D.countries[n])).join('')}<tr><td><b>All countries</b></td><td><b>${fmt(t.installations)}</b></td>${DES.map(([k])=>`<td><b>${D.designation[k]}</b></td>`).join('')}<td><b>${fmt(t.kw)}</b></td></tr></tbody></table></div>`;
+}
+function render(){
+  const t=D.totals,m=D.method;
+  $('app').innerHTML=`
+  <header><div class="eyebrow">Let’s Share the Sun</div><h1>Our impact</h1><p class="sub">Updated ${D.updated_label}</p></header>
+  <section class="tiles" aria-label="Headline numbers">
+    <div class="tile"><div class="num">${fmt(t.installations)}</div><div class="lab">solar installations</div></div>
+    <div class="tile"><div class="num">${unit(fmt(t.kw),'kW')}</div><div class="lab">installed capacity</div></div>
+    <div class="tile"><div class="num">${unit(compact(t.lifetime_kwh),'kWh')}</div><div class="lab">estimated clean energy generated to date</div></div>
+    <div class="tile"><div class="num">${unit(fmt(t.co2_lifetime_t),'t')}</div><div class="lab">estimated CO₂ emissions avoided to date</div></div>
+    <div class="tile"><div class="num">${unit(fmt(t.storage_kwh),'kWh')}</div><div class="lab">battery storage</div></div>
+    <div class="tile"><div class="num">${fmt(D.type.homes)} + ${fmt(D.type.sites)}</div><div class="lab">homes and critical community sites</div></div>
+  </section>
+  <section class="card" aria-label="Where we work">
+    <div class="card-head"><h2>Where we work</h2><div class="tabs" role="tablist">${COUNTRIES.map(n=>`<button role="tab" aria-selected="${n===active}" data-c="${n}">${n}</button>`).join('')}</div></div>
+    ${legend()}
+    <div class="country"><div class="mapbox">${mapSvg(active)}</div>${countryPanel(active)}</div>
+  </section>
+  <section class="card" aria-label="Growth by year"><div class="card-head"><h2>Installations by year</h2></div>${legend()}${yearChart()}</section>
+  <section class="card"><details><summary>View the numbers as a table</summary>${table()}</details></section>
+  <p class="method">Generation is estimated at ${fmt(m.kwh_per_kw_year)} kWh per kW per year (PVWatts, Adjuntas, Puerto Rico). CO₂ avoided uses ${m.lbs_co2_per_kwh} lbs per kWh (EPA eGRID). Only installations with a confirmed system size are counted. To protect privacy, locations are shown as general areas and no names or addresses are shared.</p>`;
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{active=b.dataset.c;render()});
+  const tip=$('tip');
+  document.querySelectorAll('.pt').forEach(el=>{
+    const show=e=>{tip.innerHTML=decodeURIComponent(el.dataset.t);tip.style.display='block';const r=el.getBoundingClientRect();tip.style.left=Math.min(innerWidth-250,Math.max(8,r.left+r.width/2-100))+'px';tip.style.top=Math.max(8,r.top-tip.offsetHeight-10)+'px'};
+    el.addEventListener('mouseenter',show);el.addEventListener('focus',show);el.addEventListener('mouseleave',()=>tip.style.display='none');el.addEventListener('blur',()=>tip.style.display='none')});
+  postH();
+}
+function postH(){try{parent.postMessage({lstsHeight:document.documentElement.scrollHeight},'*')}catch(e){}}
+let _rt;addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(D)render()},150)});
+(window.__LSTS_DATA__?Promise.resolve(window.__LSTS_DATA__):fetch(DATA_URL).then(r=>{if(!r.ok)throw 0;return r.json()}))
+ .then(d=>{D=d;render()}).catch(()=>{$('app').innerHTML='<p class="err">Impact data is temporarily unavailable. Please check back soon.</p>'});
+</script>
+</body></html>
