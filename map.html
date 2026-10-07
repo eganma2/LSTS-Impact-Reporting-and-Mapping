@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LSTS Impact Dashboard</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LSTS Installations Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -60,7 +60,7 @@ th{font-family:var(--head);font-size:12px;letter-spacing:.06em;text-transform:up
 svg text{font-family:var(--body)}
 .u{font-size:.5em;font-weight:700;margin-left:4px;color:var(--muted)}
 </style>
-</head><body><div class="wrap" id="app" aria-live="polite"><p class="err">Loading impact data…</p></div>
+</head><body><div class="wrap" id="app" aria-live="polite"><p class="err">Loading map…</p></div>
 <div class="tip" id="tip" role="tooltip"></div>
 <script>
 try{var _t=new URLSearchParams(location.search).get('theme');if(_t==='light'||_t==='dark')document.documentElement.setAttribute('data-theme',_t)}catch(e){}
@@ -109,41 +109,16 @@ function countryPanel(name){
     (c.installations?`Shown at country level to protect the privacy of the communities and sites we serve.`:`This country will appear here once its installations are verified.`);
   return `<div><div class="stats">${stat(fmt(c.installations),'installations')}${stat(unit(fmt(c.kw),'kW'),'installed capacity')}${stat(unit(compact(c.lifetime_kwh),'kWh'),'estimated generation to date')}${stat(unit(fmt(c.co2_lifetime_t),'t'),'CO₂ avoided to date')}</div><p class="note">${note}</p></div>`;
 }
-function yearChart(){
-  const Y=D.by_year,W=Math.min(640,Math.max(340,$('app').clientWidth-42)),H=250,L=36,R=12,T=24,B=40,pw=W-L-R,ph=H-T-B,max=Math.ceil(Math.max(...Y.map(y=>y.n))/20)*20,bw=Math.min(64,pw/Y.length*0.55);
-  const sy=v=>T+ph-v/max*ph; let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Installations per year, stacked by impact area">`;
-  [0,max/2,max].forEach(t=>{s+=`<line x1="${L}" x2="${W-R}" y1="${sy(t)}" y2="${sy(t)}" stroke="var(--line)"/><text x="${L-8}" y="${sy(t)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${t}</text>`});
-  Y.forEach((y,i)=>{const cx=L+pw*(i+0.5)/Y.length;let acc=0;
-    DES.forEach(([k,l])=>{const v=y[k];if(!v)return;const y0=sy(acc+v),hh=sy(acc)-y0;acc+=v;
-      s+=`<rect class="pt" tabindex="0" x="${cx-bw/2}" y="${y0}" width="${bw}" height="${hh}" fill="var(--${k})" stroke="var(--card)" stroke-width="2" rx="2" data-t="${encodeURIComponent('<b>'+y.label+'</b><br>'+l+': '+v)}" aria-label="${y.label}, ${l}: ${v}"/>`});
-    s+=`<text x="${cx}" y="${sy(y.n)-6}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">${y.n}</text><text x="${cx}" y="${H-T+4}" text-anchor="middle" font-size="12.5" fill="var(--muted)">${y.label}</text>`});
-  return s+'</svg>';
-}
-function table(){
-  const row=(n,c)=>`<tr><td>${n}</td><td>${fmt(c.installations)}</td>${DES.map(([k])=>`<td>${c.designation[k]||0}</td>`).join('')}<td>${fmt(c.kw)}</td></tr>`;
-  const head=`<tr><th>Country</th><th>Installations</th>${DES.map(([,l])=>`<th>${l}</th>`).join('')}<th>kW</th></tr>`;
-  const t=D.totals;
-  return `<div class="scroll"><table><thead>${head}</thead><tbody>${COUNTRIES.map(n=>row(n,D.countries[n])).join('')}<tr><td><b>All countries</b></td><td><b>${fmt(t.installations)}</b></td>${DES.map(([k])=>`<td><b>${D.designation[k]}</b></td>`).join('')}<td><b>${fmt(t.kw)}</b></td></tr></tbody></table></div>`;
-}
+
 function render(){
-  const t=D.totals,m=D.method;
+  const m=D.method;
   $('app').innerHTML=`
-  <header><div class="eyebrow">Let’s Share the Sun</div><h1>Our impact</h1><p class="sub">Updated ${D.updated_label}</p></header>
-  <section class="tiles" aria-label="Headline numbers">
-    <div class="tile"><div class="num">${fmt(t.installations)}</div><div class="lab">solar installations</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.kw),'kW')}</div><div class="lab">installed capacity</div></div>
-    <div class="tile"><div class="num">${unit(compact(t.lifetime_kwh),'kWh')}</div><div class="lab">estimated clean energy generated to date</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.co2_lifetime_t),'t')}</div><div class="lab">estimated CO₂ emissions avoided to date</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.storage_kwh),'kWh')}</div><div class="lab">battery storage</div></div>
-    <div class="tile"><div class="num">${fmt(D.type.homes)} + ${fmt(D.type.sites)}</div><div class="lab">homes and critical community sites</div></div>
-  </section>
-  <section class="card" aria-label="Where we work">
-    <div class="card-head"><h2>Where we work</h2><div class="tabs" role="tablist">${COUNTRIES.map(n=>`<button role="tab" aria-selected="${n===active}" data-c="${n}">${n}</button>`).join('')}</div></div>
+  <header><div class="eyebrow">Let’s Share the Sun</div><h1>Where we have installed solar</h1><p class="sub">All installations to date · Updated ${D.updated_label}</p></header>
+  <section class="card" aria-label="Installations map">
+    <div class="card-head"><h2>${fmt(D.totals.installations)} installations</h2><div class="tabs" role="tablist">${COUNTRIES.map(n=>`<button role="tab" aria-selected="${n===active}" data-c="${n}">${n}</button>`).join('')}</div></div>
     ${legend()}
     <div class="country"><div class="mapbox">${mapSvg(active)}</div>${countryPanel(active)}</div>
   </section>
-  <section class="card" aria-label="Growth by year"><div class="card-head"><h2>Installations by year</h2></div>${legend()}${yearChart()}</section>
-  <section class="card"><details><summary>View the numbers as a table</summary>${table()}</details></section>
   <p class="method">Generation is estimated at ${fmt(m.kwh_per_kw_year)} kWh per kW per year (PVWatts, Adjuntas, Puerto Rico). CO₂ avoided uses ${m.lbs_co2_per_kwh} lbs per kWh (EPA eGRID). Only installations with a confirmed system size are counted. To protect privacy, locations are shown as general areas and no names or addresses are shared.</p>`;
   document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{active=b.dataset.c;render()});
   const tip=$('tip');
