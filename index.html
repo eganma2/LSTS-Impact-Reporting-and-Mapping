@@ -1,19 +1,21 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LSTS Impact Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-/* Two views: a zoomed-out world map (started / been / going), and a regional view per country with one circle per general area, sized by installed kW. */
+/* Layout: (dashboard page only) six headline tiles in 2 rows of 3, the map card, installs-over-time chart, numbers table. Map: world view first, then click a country to zoom to a street map with circles for general areas. */
 :root{
   --bg:#F6F6F6; --card:#FFFFFF; --ink:#1A1412; --muted:#6B5E59; --line:#E4DDD8; --edge:#47231B;
-  --started:#B5381A; --been:#FF9F1C; --going:#FFCC00; --land:#FBF8F4; --land-line:#E8A15A; --sea:#FFFFFF; --bubble:#F4A58A; --tab-on:#FF9F1C; --ray:#FFE600; --dot:#47231B; --dot-ink:#FFFFFF;
+  --started:#B5381A; --been:#FF9F1C; --going:#FFCC00; --land:#FBF8F4; --land-line:#E8A15A; --sea:#FFFFFF; --bubble:#F4A58A; --tab-on:#FF9F1C;
+  --ray:#FFCC00; --ray2:#FF9F1C; --dot:#47231B; --dot-ink:#FFFFFF; --icon-bg:#F4A340; --icon-ink:#47231B;
   --head:'Raleway','Arial',sans-serif; --body:'Source Serif Pro','Source Serif 4',Georgia,serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#171110; --card:#211918; --ink:#F6F6F6; --muted:#B9ADA7; --line:#3A2E2B; --edge:#171110;
-  --started:#E0603F; --land:#2B211F; --land-line:#8A5A2B; --sea:#1B2326; --bubble:#E8957A; --dot:#C98A6C; --dot-ink:#171110; color-scheme:dark}}
+  --started:#E0603F; --land:#2B211F; --land-line:#8A5A2B; --sea:#1B2326; --bubble:#E8957A; --dot:#C98A6C; --dot-ink:#171110; --icon-ink:#171110; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#171110; --card:#211918; --ink:#F6F6F6; --muted:#B9ADA7; --line:#3A2E2B; --edge:#171110;
-  --started:#E0603F; --land:#2B211F; --land-line:#8A5A2B; --sea:#1B2326; --bubble:#E8957A; --dot:#C98A6C; --dot-ink:#171110; color-scheme:dark}
+  --started:#E0603F; --land:#2B211F; --land-line:#8A5A2B; --sea:#1B2326; --bubble:#E8957A; --dot:#C98A6C; --dot-ink:#171110; --icon-ink:#171110; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;margin:0;padding-inline:16px;padding-block:28px 40px}
 .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
@@ -28,20 +30,23 @@ h2{font-weight:800;font-size:22px}
 .tabs button,.back{font:700 14px var(--head);border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 16px;cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--tab-on);border-color:var(--tab-on);color:#1A1412}
 .tabs button:focus-visible,.back:focus-visible,.pt:focus-visible,.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin:0 0 12px;padding:0;list-style:none}
-.legend li{display:flex;align-items:center;gap:7px}
-.sw{width:12px;height:12px;border-radius:50%;border:1px solid var(--edge);flex:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:14px;color:var(--ink);margin:0 0 12px;padding:0;list-style:none}
+.legend li{display:flex;align-items:center;gap:8px}
+.sw{width:13px;height:13px;border-radius:50%;border:1px solid var(--edge);flex:none}
 .country{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:760px){.country{grid-template-columns:minmax(0,1fr)}}
 .mapbox{position:relative;background:var(--sea);border-radius:8px;overflow:hidden}
 .mapbox svg.main{display:block;width:100%;height:auto}
+.lmap{height:470px;width:100%;background:var(--sea);z-index:0}
+@media (max-width:760px){.lmap{height:360px}}
 .go{cursor:pointer}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
 .stat .num{font-weight:800;font-size:24px;font-variant-numeric:tabular-nums}
 .stat .lab{font-size:13px;color:var(--muted)}
 .note{font-size:13px;color:var(--muted);margin:14px 0 0}
-.tip{position:fixed;z-index:5;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.35;padding:8px 10px;border-radius:6px;max-width:240px;display:none}
-.tip b{font-family:var(--head)}
+.tip{position:fixed;z-index:1000;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.35;padding:8px 10px;border-radius:6px;max-width:240px;display:none}
+.tip b,.leaflet-tooltip b{font-family:var(--head)}
+.leaflet-tooltip{font:13px/1.35 var(--body);color:#1A1412;border-radius:6px}
 .method{font-size:13px;color:var(--muted)}
 .err{padding:24px;text-align:center;color:var(--muted)}
 .u{font-size:.5em;font-weight:700;margin-left:4px;color:var(--muted)}
@@ -50,8 +55,12 @@ h2{font-weight:800;font-size:22px}
 @keyframes f{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.fade{animation:none}}
 svg text{font-family:var(--body)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0;display:flex;gap:14px;align-items:center}
+.ico{flex:none;width:46px;height:46px;border-radius:50%;background:var(--icon-bg);color:var(--icon-ink);display:grid;place-items:center}
+.ico svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:640px){.tile{flex-direction:column;align-items:flex-start;gap:10px}}
 .tile .num{font-weight:800;font-size:clamp(24px,3.4vw,32px);line-height:1.1;font-variant-numeric:tabular-nums}
 .tile .lab{font-size:13px;color:var(--muted);margin-top:4px}
 details{margin:0}summary{cursor:pointer;font-family:var(--head);font-weight:700}
@@ -61,128 +70,169 @@ th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;whit
 th:first-child,td:first-child{text-align:left}
 th{font-family:var(--head);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .sunchart{display:block;width:100%;height:auto}
-
 </style>
-</head><body><div class="wrap" id="app" aria-live="polite"><p class="err">Loading map…</p></div>
+</head><body><div class="wrap" id="app" aria-live="polite"><p class="err">Loading…</p></div>
 <div class="tip" id="tip" role="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+const FULL=true;
 try{var _t=new URLSearchParams(location.search).get('theme');if(_t==='light'||_t==='dark')document.documentElement.setAttribute('data-theme',_t)}catch(e){}
-const DATA_URL=(function(){try{return new URLSearchParams(location.search).get('data')||'data.json'}catch(e){return 'data.json'}})();
+const qp=k=>{try{return new URLSearchParams(location.search).get(k)}catch(e){return null}};
+const DATA_URL=qp('data')||'data.json', WORLD_URL=qp('world')||'world.json';
 const fmt=n=>Math.round(n).toLocaleString('en-US');
 const compact=n=>n>=1e6?(n/1e6).toFixed(2)+'M':fmt(n);
 const unit=(v,u)=>`${v}<span class="u">${u}</span>`;
 const $=id=>document.getElementById(id);
-const GROUPS=[['started','Where we started','Haiti'],['been','Where we’ve been','Puerto Rico, Honduras'],['going','Where we’re going','Indiana, Mexico, Uganda']];
-let D=null,view='world',anim=false;
+const isDark=()=>{const t=document.documentElement.getAttribute('data-theme');return t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches)};
+const GROUPS=[['started','Where we started'],['been','Where we’ve been'],['going','Where we’re going']];
+const COUNTRIES=['Puerto Rico','Honduras','Haiti'];
+let D=null,WD=null,view='world',anim=false,LMAP=null;
 const clickable=n=>D.countries[n]&&D.countries[n].installations>0;
-function legend(){return '<ul class="legend">'+GROUPS.map(([k,t,c])=>`<li><span class="sw" style="background:var(--${k})"></span><b>${t}</b>&nbsp;${c}</li>`).join('')+'</ul>'}
+function legend(){return '<ul class="legend">'+GROUPS.map(([k,t])=>`<li><span class="sw" style="background:var(--${k})"></span><b>${t}</b></li>`).join('')+'</ul>'}
 function stat(n,l){return `<div class="stat"><div class="num">${n}</div><div class="lab">${l}</div></div>`}
 function statsOf(c){return `<div class="stats">${stat(fmt(c.installations),'installations')}${stat(unit(fmt(c.kw),'kW'),'installed capacity')}${stat(unit(compact(c.lifetime_kwh),'kWh'),'estimated generation to date')}${stat(unit(fmt(c.co2_lifetime_t),'t'),'CO₂ avoided to date')}</div>`}
-function tabsHtml(){return ['Puerto Rico','Honduras','Haiti'].map(n=>`<button role="tab" aria-selected="${view===n}" data-c="${n}">${n}</button>`).join('')}
 
-/* ---------- world view ---------- */
+/* ---------- headline tiles with icons ---------- */
+const ICON={
+ installs:'<rect x="3" y="10" width="18" height="10" rx="1.2"/><path d="M3 15h18M9 10v10M15 10v10M12 3v2.5M5.5 5.5l1.5 1.7M18.5 5.5L17 7.2"/>',
+ capacity:'<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z"/>',
+ energy:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+ co2:'<path d="M5 19c-1-8 4-14 14-14 .5 10-5 15-13 14"/><path d="M5 19c3-6 6-9 11-11"/>',
+ storage:'<rect x="2.5" y="8" width="16" height="9" rx="2"/><path d="M21 11v3M10.5 10.5l-2 3h3l-2 3"/>',
+ homes:'<path d="M3 11.5L12 4l9 7.5M5.5 10v10h13V10M10 20v-5.5h4V20"/>'};
+const tile=(k,num,lab)=>`<div class="tile"><div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON[k]}</svg></div><div><div class="num">${num}</div><div class="lab">${lab}</div></div></div>`;
+function tiles(){const t=D.totals;return `<section class="tiles" aria-label="Headline numbers">
+  ${tile('installs',fmt(t.installations),'solar installations')}
+  ${tile('capacity',unit(fmt(t.kw),'kW'),'installed capacity')}
+  ${tile('energy',unit(compact(t.lifetime_kwh),'kWh'),'estimated clean energy generated to date')}
+  ${tile('co2',unit(fmt(t.co2_lifetime_t),'t'),'estimated CO₂ emissions avoided to date')}
+  ${tile('storage',unit(fmt(t.storage_kwh),'kWh'),'battery storage')}
+  ${tile('homes',`${fmt(D.type.homes)} + ${fmt(D.type.sites)}`,'homes and critical community sites')}</section>`}
+
+/* ---------- world view (static shapes from world.json) ---------- */
 function worldSvg(){
-  const W=D.world,ins=D.world.inset,z=W.w/360,ux=(ins.lon+180)*z,uy=(75-ins.lat)*z,ur=ins.r_deg*z;
+  const W=WD,ins=W.inset,z=W.w/360,ux=(ins.lon+180)*z,uy=(75-ins.lat)*z,ur=ins.r_deg*z;
   const cx=135,cy=W.h-118,R=105,s=R/ur;
-  const cls=c=>c.status?`style="fill:var(--${c.status});stroke:var(--land-line)"`:'';
+  const grp=st=>GROUPS.find(g=>g[0]===st)[1];
   const hit=c=>c.status&&clickable(c.name);
-  const tipFor=c=>{const d=D.countries[c.name];const g=GROUPS.find(g=>g[0]===c.status)[1];return encodeURIComponent(`<b>${c.name}</b><br>${g}`+(d&&d.installations?`<br>${fmt(d.installations)} installations · click to zoom in`:'<br>Installations coming soon'))};
-  const shape=(c,extra)=>`<path d="${c.path}" ${c.status?cls(c):'style="fill:var(--land);stroke:var(--land-line)"'} stroke-width="${c.status?1.1:.7}" vector-effect="non-scaling-stroke"${c.status?` class="pt${hit(c)?' go':''}" data-t="${tipFor(c)}" data-go="${hit(c)?c.name:''}" ${hit(c)?'tabindex="0" role="button"':''} aria-label="${c.name}, ${GROUPS.find(g=>g[0]===c.status)[1]}"`:''} ${extra||''}/>`;
+  const tipFor=c=>{const d=D.countries[c.name];return encodeURIComponent(`<b>${c.name}</b><br>${grp(c.status)}`+(d&&d.installations?`<br>${fmt(d.installations)} installations · click to zoom in`:'<br>Installations coming soon'))};
+  const shape=c=>c.status
+    ?`<path d="${c.path}" style="fill:var(--${c.status});stroke:var(--land-line)" stroke-width="1.1" vector-effect="non-scaling-stroke" class="pt${hit(c)?' go':''}" data-t="${tipFor(c)}" data-go="${hit(c)?c.name:''}" ${hit(c)?'tabindex="0" role="button"':''} aria-label="${c.name}, ${grp(c.status)}"/>`
+    :`<path d="${c.path}" style="fill:var(--land);stroke:var(--land-line)" stroke-width="${c.state?.45:.7}" vector-effect="non-scaling-stroke"/>`;
   const near=W.countries.filter(c=>c.bbox[2]>ux-ur&&c.bbox[0]<ux+ur&&c.bbox[3]>uy-ur&&c.bbox[1]<uy+ur);
-  const base=W.countries.map(c=>c.status?'':shape(c)).join('')+W.countries.map(c=>c.status?shape(c):'').join('');
-  const insetShapes=near.map(c=>shape(c)).join('');
-  const labels=GROUPS.map(()=>'').join('');
+  const lakes=(W.lakes||[]).map(d=>`<path d="${d}" style="fill:var(--sea);stroke:var(--land-line)" stroke-width=".7" vector-effect="non-scaling-stroke"/>`).join('');
+  const base=W.countries.map(c=>c.status?'':shape(c)).join('')+W.countries.map(c=>c.status?shape(c):'').join('')+lakes;
   return `<svg class="main" viewBox="0 0 ${W.w} ${W.h}" id="wsvg" role="group" aria-label="World map. Haiti is where we started; Puerto Rico and Honduras are where we have been; Indiana, Mexico and Uganda are where we are going.">
   <defs><clipPath id="ic"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath></defs>
-  <g id="wland">${base}</g>
+  <g>${base}</g>
   <circle cx="${ux}" cy="${uy}" r="${ur}" fill="none" stroke="var(--been)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
   <line x1="${ux-ur*.7}" y1="${uy+ur*.7}" x2="${cx+R*.7}" y2="${cy-R*.7}" stroke="var(--been)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
   <circle cx="${cx}" cy="${cy}" r="${R}" fill="var(--sea)"/>
-  <g clip-path="url(#ic)"><g transform="translate(${cx} ${cy}) scale(${s}) translate(${-ux} ${-uy})">${insetShapes}</g></g>
+  <g clip-path="url(#ic)"><g transform="translate(${cx} ${cy}) scale(${s}) translate(${-ux} ${-uy})">${near.map(shape).join('')}</g></g>
   <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--been)" stroke-width="3" vector-effect="non-scaling-stroke"/>
   </svg>`;
 }
 function worldPanel(){
-  const t=D.totals;
-  return `<div><p class="note" style="margin-top:0">Click Puerto Rico, Honduras or Haiti on the map, or use the buttons above, to zoom in and see where installations are. Indiana, Mexico and Uganda are where we are going next.</p></div>`;
+  return `<div>${FULL?'':statsOf(D.totals)}<p class="note" style="margin-top:${FULL?0:14}px">Click a highlighted country, or use the buttons above, to zoom in and see where installations are.</p></div>`;
 }
 
-/* ---------- country view ---------- */
-function countrySvg(name){
-  const c=D.countries[name],W=640;
-  let vb=[0,0,c.w,c.h],marks='';
-  let items=c.areas.map(a=>({x:a.x,y:a.y,n:a.n,kw:a.kw,label:'General area'}));
-  if(!items.length&&c.installations) items=[{x:c.cx,y:c.cy,n:c.installations,kw:c.kw,label:name+' (country level)'}];
-  if(c.areas.length&&name==='Puerto Rico'){
-    const xs=c.areas.map(a=>a.x),ys=c.areas.map(a=>a.y);
-    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
-    const pad=Math.max(50,.14*Math.max(x1-x0,y1-y0));
-    let w=Math.max(x1-x0+2*pad,300),h=w*.62; if(y1-y0+2*pad>h){h=y1-y0+2*pad;w=h/.62}
-    vb=[(x0+x1)/2-w/2,(y0+y1)/2-h/2,w,h];
-  }
-  const u=vb[2]/W,maxkw=Math.max(...items.map(i=>i.kw),1),maxR=vb[2]*(name==='Puerto Rico'?.085:.055);
-  const rad=k=>Math.max(4*u,maxR*Math.sqrt(k/maxkw));
-  items.slice().sort((a,b)=>b.kw-a.kw).forEach(i=>{
-    const tip=encodeURIComponent(`<b>${i.label}</b><br>${fmt(i.n)} installations<br>${fmt(i.kw)} kW installed`);
-    marks+=`<circle class="pt" tabindex="0" cx="${i.x}" cy="${i.y}" r="${rad(i.kw).toFixed(1)}" fill="var(--bubble)" fill-opacity=".85" stroke="var(--ink)" stroke-width="1.4" vector-effect="non-scaling-stroke" data-t="${tip}" aria-label="${i.label}: ${i.n} installations, ${i.kw} kW"/>`;
-  });
-  return `<svg class="main" viewBox="${vb.map(v=>+v.toFixed(1)).join(' ')}" role="img" aria-label="Map of ${name}. Each circle is a general area, sized by installed kW."><path d="${c.path}" fill="var(--land)" stroke="var(--been)" stroke-width="2.2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>${marks}</svg>`;
-}
+/* ---------- country view: street map + circles for general areas ---------- */
 function countryPanel(name){
-  const c=D.countries[name],m=D.method;
-  const n=c.areas.length?`Each circle is a general area, not a site location. Circle size shows installed kW. Areas with fewer than ${m.min_group} installations are combined.`+(c.other?` ${c.other} installations in smaller areas are counted in the totals but not shown on the map.`:''):`Shown at country level to protect the privacy of the communities and sites we serve. Circle size shows installed kW.`;
-  return `<div>${statsOf(c)}<p class="note">${n}</p></div>`;
+  const c=D.countries[name];
+  return `<div>${statsOf(c)}<p class="note" id="lnote"></p></div>`;
+}
+function mountMap(name){
+  const el=$('lmap'); if(!el) return;
+  if(!window.L){el.innerHTML='<p class="err">The street map could not load. Please check back soon.</p>';return}
+  const c=D.countries[name],b=c.bounds,m=D.method;
+  const map=L.map(el,{scrollWheelZoom:false,zoomSnap:1,attributionControl:true,worldCopyJump:false}); LMAP=map;
+  const url=isDark()?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  L.tileLayer(url,{subdomains:'abcd',maxZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+  const bounds=L.latLngBounds([b[0],b[1]],[b[2],b[3]]);
+  map.fitBounds(bounds,{padding:[10,10]});
+  const base=map.getZoom(),L_=Math.max(1,c.levels.length);
+  map.setMinZoom(base-1); map.setMaxZoom(base+L_-1);
+  L.geoJSON(c.outline,{style:{color:'#FF9F1C',weight:3,fill:false,opacity:.95},interactive:false}).addTo(map);
+  const layer=L.layerGroup().addTo(map);
+  const anyAreas=c.levels.some(l=>l.areas.length);
+  function draw(){
+    layer.clearLayers();
+    const lvl=Math.max(0,Math.min(L_-1,Math.round(map.getZoom()-base))),Lv=c.levels[lvl]||{areas:[],other:c.installations};
+    const note=$('lnote');
+    if(anyAreas){
+      const mx=Math.max(1,...Lv.areas.map(a=>a[3]));
+      Lv.areas.slice().sort((a,b)=>b[3]-a[3]).forEach(a=>{
+        const r=7+30*Math.sqrt(a[3]/mx);
+        L.circleMarker([a[0],a[1]],{radius:r,color:'#1A1412',weight:1.6,fillColor:'#F4A58A',fillOpacity:.82})
+         .bindTooltip(`<b>General area</b><br>${fmt(a[2])} installations<br>${fmt(a[3])} kW installed`,{sticky:true}).addTo(layer);
+      });
+      note.textContent=`Each circle is a general area, not a site location, and its size shows installed kW. Zoom in with the + button to see smaller areas. Areas with fewer than ${m.min_group} installations are not shown separately.`+(Lv.other?` ${fmt(Lv.other)} installations are counted in the totals but not drawn at this zoom (no map location, or in smaller areas).`:'');
+    } else {
+      const ctr=bounds.getCenter();
+      L.circleMarker(ctr,{radius:38,color:'#1A1412',weight:1.6,dashArray:'5 4',fillColor:'#F4A58A',fillOpacity:.6})
+       .bindTooltip(`<b>${name}</b><br>${fmt(c.installations)} installations<br>${fmt(c.kw)} kW installed<br>Shown at country level`,{sticky:true}).addTo(layer);
+      note.textContent=`Shown at country level, not at a site, to protect the privacy of the communities and sites we serve. Circle size is not to scale.`;
+    }
+  }
+  map.on('zoomend',draw); draw();
+  /* scroll-wheel zoom only after the map is clicked, so the page still scrolls normally */
+  map.on('click focus',()=>map.scrollWheelZoom.enable()); el.addEventListener('mouseleave',()=>map.scrollWheelZoom.disable());
+  setTimeout(()=>map.invalidateSize(),50);
 }
 
-
-/* ---------- sun-ray growth chart: running total of installations ---------- */
+/* ---------- installs-over-time chart: rays of the sun, evenly spaced and aligned ---------- */
 function sunChart(){
   const pts=D.cumulative||[]; if(!pts.length) return '';
-  const avail=Math.min(1000,Math.max(300,($('app').clientWidth||900)-42)),W=avail,H=Math.round(W*(W<520?1.05:.62));
-  const r=Math.max(19,Math.min(40,W*.037)),fs=Math.max(12,Math.min(26,r*.68)),n=pts.length;
-  const sunR=Math.min(80,W*.08),sx=W-sunR-8,sy=sunR+10;
-  const x0=r+18,x1=sx-sunR-r*.4,base=H-30,yTop=sy+sunR*.9,yBot=base-r*3.1;
-  const px=i=>x0+(x1-x0)*i/(n-1),py=i=>yBot-(yBot-yTop)*(i/(n-1));
-  const bw=Math.max(14,r*.9);
-  let o=`<svg class="sunchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Installations over time: ${pts.map(p=>p.total+' by '+p.label).join(', ')}">`;
-  const ray=(x1,y1,x2,y2,w)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ray)" stroke-width="${w}" stroke-linecap="butt"/>`;
-  const rw=Math.max(8,sunR*.2);
-  o+=ray(8,18,sx-sunR*.6,sy-sunR*.35,rw)+ray(W*.38,sy+2,sx-sunR*.7,sy+2,rw)+ray(sx-sunR*.3,sy+sunR*.9,sx-sunR*1.1,sy+sunR*2.1,rw)+ray(sx,sy+sunR,sx,base+14,rw);
-  o+=`<circle cx="${sx}" cy="${sy}" r="${sunR}" fill="var(--ray)"/>`;
-  o+=ray(px(0)-r*.6,py(0)+r*.8,sx-sunR*.55,sy+sunR*.45,bw);
-  pts.forEach((p,i)=>{const x=px(i),y=py(i);
-    o+=`<line x1="${x}" y1="${y+r+fs*1.5}" x2="${x}" y2="${base-fs-2}" stroke="var(--ink)" stroke-width="1" opacity=".55"/>`;
-    o+=`<circle cx="${x}" cy="${y}" r="${r}" fill="var(--dot)"/><text x="${x}" y="${y+fs*.36}" text-anchor="middle" font-family="var(--head)" font-weight="800" font-size="${fs}" fill="var(--dot-ink)">${fmt(p.total)}</text>`;
-    o+=`<text x="${x}" y="${y+r+fs*.95}" text-anchor="middle" font-size="${Math.max(11,fs*.62)}" font-weight="600" fill="var(--ink)">${p.total===1?'install':'installs'}</text>`;
-    o+=`<text x="${x}" y="${base+4}" text-anchor="middle" font-family="var(--head)" font-weight="700" font-size="${Math.max(12,fs*.7)}" fill="var(--ink)">${p.label}</text>`;
+  const avail=Math.min(1000,Math.max(300,($('app').clientWidth||900)-42)),W=avail;
+  const small=W<520;
+  const sunR=Math.max(18,Math.min(54,W*.055)),r=Math.max(17,Math.min(38,W*.037)),fs=Math.max(12,Math.min(22,r*.62));
+  const padR=12,padL=r+10,rayOut=sunR*2.05;
+  const sx=W-padR-rayOut,sy=rayOut+6;
+  const H=Math.round(small?W*1.0:W*.6),base=H-34,n=pts.length;
+  const x0=padL,y0=base-r-58;
+  const dx=sx-x0,dy=sy-y0,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len,gap=sunR*2.35+r*1.3;
+  const xl=sx-ux*gap;                                   // last circle sits on the line, clear of the rays
+  const px=i=>x0+(xl-x0)*i/(n-1),py=i=>y0+(px(i)-x0)*(dy/dx);
+  const nx=-uy,ny=ux,hw0=2,hw1=sunR*.75;                // beam half-widths at the start and at the sun
+  const bx0=x0-ux*r*1.2,by0=y0-uy*r*1.2;
+  let o=`<svg class="sunchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Installations over time: ${pts.map(p=>fmt(p.total)+' by '+p.label).join(', ')}">`;
+  o+=`<defs><linearGradient id="bm" gradientUnits="userSpaceOnUse" x1="${bx0}" y1="${by0}" x2="${sx}" y2="${sy}"><stop offset="0" stop-color="var(--ray)" stop-opacity="0"/><stop offset="1" stop-color="var(--ray)" stop-opacity=".55"/></linearGradient>
+  <radialGradient id="sc" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFE680"/><stop offset=".6" stop-color="var(--ray)"/><stop offset="1" stop-color="var(--ray2)"/></radialGradient></defs>`;
+  o+=`<polygon points="${bx0+nx*hw0},${by0+ny*hw0} ${sx+nx*hw1},${sy+ny*hw1} ${sx-nx*hw1},${sy-ny*hw1} ${bx0-nx*hw0},${by0-ny*hw0}" fill="url(#bm)"/>`;
+  o+=`<line x1="${bx0}" y1="${by0}" x2="${sx}" y2="${sy}" stroke="var(--ray2)" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>`;
+  const rays=16,sw=Math.max(3,sunR*.12);
+  for(let i=0;i<rays;i++){const a=i/rays*2*Math.PI,l=i%2?sunR*1.62:sunR*1.9;
+    o+=`<line x1="${(sx+Math.cos(a)*sunR*1.38).toFixed(1)}" y1="${(sy+Math.sin(a)*sunR*1.38).toFixed(1)}" x2="${(sx+Math.cos(a)*l).toFixed(1)}" y2="${(sy+Math.sin(a)*l).toFixed(1)}" stroke="var(--ray)" stroke-width="${sw}" stroke-linecap="round"/>`}
+  o+=`<circle cx="${sx}" cy="${sy}" r="${sunR*1.18}" fill="none" stroke="var(--ray)" stroke-opacity=".45" stroke-width="${Math.max(2,sunR*.08)}"/><circle cx="${sx}" cy="${sy}" r="${sunR}" fill="url(#sc)"/>`;
+  const xa=x0-r,xb=W-padR;
+  o+=`<line x1="${xa}" y1="${base}" x2="${xb}" y2="${base}" stroke="var(--line)" stroke-width="1.5"/>`;
+  pts.forEach((p,i)=>{const x=px(i),y=py(i),lab=Math.max(11,fs*.62);
+    o+=`<line x1="${x}" y1="${y+r+lab+8}" x2="${x}" y2="${base}" stroke="var(--muted)" stroke-width="1" opacity=".6"/>`;
+    o+=`<circle cx="${x}" cy="${y}" r="${r}" fill="var(--dot)" stroke="var(--ray)" stroke-width="3"/><text x="${x}" y="${y+fs*.36}" text-anchor="middle" font-family="var(--head)" font-weight="800" font-size="${fs}" fill="var(--dot-ink)">${fmt(p.total)}</text>`;
+    o+=`<text x="${x}" y="${y+r+lab+2}" text-anchor="middle" font-size="${lab}" font-weight="600" fill="var(--ink)">${p.total===1?'install':'installs'}</text>`;
+    o+=`<text x="${x}" y="${base+22}" text-anchor="middle" font-family="var(--head)" font-weight="700" font-size="${Math.max(12,fs*.72)}" fill="var(--ink)">${p.label}</text>`;
   });
   return o+'</svg>';
 }
 function table(){
-  const row=(n,c)=>`<tr><td>${n}</td><td>${fmt(c.installations)}</td><td>${fmt(c.kw)}</td></tr>`;
-  const t=D.totals;
-  return `<div class="scroll"><table><thead><tr><th>Country</th><th>Installations</th><th>kW</th></tr></thead><tbody>${['Puerto Rico','Honduras','Haiti'].map(n=>row(n,D.countries[n])).join('')}<tr><td><b>All countries</b></td><td><b>${fmt(t.installations)}</b></td><td><b>${fmt(t.kw)}</b></td></tr></tbody></table></div>`;
+  const row=(n,c)=>`<tr><td>${n}</td><td>${fmt(c.installations)}</td><td>${fmt(c.kw)}</td></tr>`,t=D.totals;
+  return `<div class="scroll"><table><thead><tr><th>Country</th><th>Installations</th><th>kW</th></tr></thead><tbody>${COUNTRIES.map(n=>row(n,D.countries[n])).join('')}<tr><td><b>All countries</b></td><td><b>${fmt(t.installations)}</b></td><td><b>${fmt(t.kw)}</b></td></tr></tbody></table></div>`;
 }
+
 /* ---------- render ---------- */
 function render(){
-  const t=D.totals,m=D.method,isW=view==='world',name=view;
+  if(LMAP){LMAP.remove();LMAP=null}
+  const m=D.method,isW=view==='world',name=view;
   $('app').innerHTML=`
-  <header><div class="eyebrow">Let’s Share the Sun</div><h1>Our Impact</h1><p class="sub">All installations to date · Updated ${D.updated_label}</p></header>
-  <section class="tiles" aria-label="Headline numbers">
-    <div class="tile"><div class="num">${fmt(t.installations)}</div><div class="lab">solar installations</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.kw),'kW')}</div><div class="lab">installed capacity</div></div>
-    <div class="tile"><div class="num">${unit(compact(t.lifetime_kwh),'kWh')}</div><div class="lab">estimated clean energy generated to date</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.co2_lifetime_t),'t')}</div><div class="lab">estimated CO₂ emissions avoided to date</div></div>
-    <div class="tile"><div class="num">${unit(fmt(t.storage_kwh),'kWh')}</div><div class="lab">battery storage</div></div>
-    <div class="tile"><div class="num">${fmt(D.type.homes)} + ${fmt(D.type.sites)}</div><div class="lab">homes and critical community sites</div></div>
-  </section>
+  <header><div class="eyebrow">Let’s Share the Sun</div><h1>${FULL?'Our Impact':'Where we have installed solar'}</h1><p class="sub">All installations to date · Updated ${D.updated_label}</p></header>
+  ${FULL?tiles():''}
   <section class="card" aria-label="Installations map">
-    <div class="card-head"><h2>${isW?fmt(D.totals.installations)+' installations':name}</h2><div class="tabs" role="tablist">${['Puerto Rico','Honduras','Haiti'].map(n=>`<button role="tab" aria-selected="${view===n}" data-c="${n}">${n}</button>`).join('')}</div></div>
+    <div class="card-head"><h2>${isW?fmt(D.totals.installations)+' installations':name}</h2><div class="tabs" role="tablist">${COUNTRIES.map(n=>`<button role="tab" aria-selected="${view===n}" data-c="${n}">${n}</button>`).join('')}</div></div>
     ${isW?legend():'<button class="back" id="back">← Back to world map</button>'}
-    <div class="country ${anim?'':'fade'}" style="${isW?'grid-template-columns:minmax(0,1fr)':''}"><div class="mapbox">${isW?worldSvg():countrySvg(name)}</div>${isW?worldPanel():countryPanel(name)}</div>
+    <div class="country ${anim?'':'fade'}" style="${isW?'grid-template-columns:minmax(0,1fr)':''}"><div class="mapbox">${isW?worldSvg():'<div class="lmap" id="lmap"></div>'}</div>${isW?worldPanel():countryPanel(name)}</div>
   </section>
-  <section class="card" aria-label="Growth in installations"><div class="card-head"><h2>Installations to date</h2></div>${sunChart()}<p class="note">Each circle is the running total of installations on record by the end of that year (2026 is the year so far). Years in between with no installations are left out.</p></section>
-  <section class="card"><details><summary>View the numbers as a table</summary>${table()}</details></section>
+  ${FULL?`<section class="card" aria-label="Growth in installations"><div class="card-head"><h2>Installations to date</h2></div><div id="sunwrap">${sunChart()}</div><p class="note">Each circle is the running total of installations on record by the end of that year (2026 is the year so far). Years in between with no installations are left out.</p></section>
+  <section class="card"><details><summary>View the numbers as a table</summary>${table()}</details></section>`:''}
   <p class="method">Generation is estimated at ${fmt(m.kwh_per_kw_year)} kWh per kW per year (PVWatts, Adjuntas, Puerto Rico). CO₂ avoided uses ${m.lbs_co2_per_kwh} lbs per kWh (EPA eGRID). Only installations with a confirmed system size are counted. To protect privacy, locations are shown as general areas and no names or addresses are shared.</p>`;
   document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>zoomTo(b.dataset.c));
   const bk=$('back'); if(bk) bk.onclick=()=>{view='world';render()};
@@ -192,14 +242,15 @@ function render(){
     el.addEventListener('mouseenter',show);el.addEventListener('focus',show);el.addEventListener('mouseleave',()=>tip.style.display='none');el.addEventListener('blur',()=>tip.style.display='none');
     const g=el.dataset.go; if(g){el.addEventListener('click',()=>zoomTo(g));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();zoomTo(g)}})}
   });
+  if(!isW) mountMap(name);
   postH();
 }
-/* zoom from the world map into a country, then show its regional view */
+/* zoom from the world map into a country, then show its street-map view */
 function zoomTo(name){
   if(anim||!clickable(name)) return;
   const svg=$('wsvg'); $('tip').style.display='none';
   if(view!=='world'||!svg||matchMedia('(prefers-reduced-motion:reduce)').matches){view=name;render();return}
-  const W=D.world,c=W.countries.find(x=>x.name===name),b=c.bbox,cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2;
+  const W=WD,c=W.countries.find(x=>x.name===name),b=c.bbox,cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2;
   const tw=Math.max(b[2]-b[0],b[3]-b[1],4)*3.2,th=tw*W.h/W.w,from=[0,0,W.w,W.h],to=[cx-tw/2,cy-th/2,tw,th];
   anim=true;const t0=performance.now(),T=700;
   (function step(now){
@@ -211,8 +262,10 @@ function zoomTo(name){
   })(t0);
 }
 function postH(){try{parent.postMessage({lstsHeight:document.documentElement.scrollHeight},'*')}catch(e){}}
-let _rt;addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(D&&!anim)render()},150)});
-(window.__LSTS_DATA__?Promise.resolve(window.__LSTS_DATA__):fetch(DATA_URL,{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json()}))
- .then(d=>{D=d;render()}).catch(()=>{$('app').innerHTML='<p class="err">Impact data is temporarily unavailable. Please check back soon.</p>'});
+let _rt;addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{if(!D||anim)return;
+  if(view==='world')render(); else {if(LMAP)LMAP.invalidateSize();const sw=$('sunwrap');if(sw)sw.innerHTML=sunChart();postH()}},150)});
+Promise.all([window.__LSTS_DATA__?Promise.resolve(window.__LSTS_DATA__):fetch(DATA_URL,{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json()}),
+             fetch(WORLD_URL).then(r=>{if(!r.ok)throw 0;return r.json()})])
+ .then(([d,w])=>{D=d;WD=w;render()}).catch(()=>{$('app').innerHTML='<p class="err">Impact data is temporarily unavailable. Please check back soon.</p>'});
 </script>
 </body></html>
