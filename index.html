@@ -46,6 +46,7 @@ h2{font-weight:800;font-size:22px}
 .note{font-size:13px;color:var(--muted);margin:14px 0 0}
 .tip{position:fixed;z-index:1000;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.35;padding:8px 10px;border-radius:6px;max-width:240px;display:none}
 .tip b,.leaflet-tooltip b{font-family:var(--head)}
+.cnt{display:grid;place-items:center;width:0;height:0}.cnt span{transform:translate(-50%,-50%);font-family:var(--head);font-weight:800;color:#3A1D00;text-shadow:0 0 3px rgba(255,255,255,.6);white-space:nowrap;display:block;position:absolute;line-height:1}
 .tiles-dark{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9)}
 .leaflet-tooltip{font:13px/1.35 var(--body);color:#1A1412;border-radius:6px}
 .method{font-size:13px;color:var(--muted)}
@@ -151,28 +152,28 @@ function mountMap(name){
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,className:isDark()?'tiles-dark':'',attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
   const bounds=L.latLngBounds([b[0],b[1]],[b[2],b[3]]);
   map.fitBounds(bounds,{padding:[10,10]});
-  const base=map.getZoom(),L_=Math.max(1,c.levels.length);
-  map.setMinZoom(base-1); map.setMaxZoom(base+L_-1);
-  L.geoJSON(c.outline,{style:{color:'#FF9F1C',weight:3,fill:false,opacity:.95},interactive:false}).addTo(map);
-  const layer=L.layerGroup().addTo(map);
-  const anyAreas=c.levels.some(l=>l.areas.length);
+  const base=map.getZoom();
+  map.setMinZoom(base-1); map.setMaxZoom(base+3);       // zoom-in is capped so exact locations are never revealed
+  L.geoJSON(c.outline,{style:{color:'#E07A00',weight:2.5,fill:false,opacity:.9},interactive:false}).addTo(map);
+  const Lv=c.levels.length?c.levels[c.levels.length-1]:{areas:[],other:c.installations};   // finest grid with at least min_group installations per circle
+  const note=$('lnote'),layer=L.layerGroup().addTo(map),RMAXM={'Puerto Rico':3200,'Honduras':5500,'Haiti':9000}[name]||4000;
+  /* circles keep a real-world size, so they spread apart as you zoom in; never smaller than 8 px so they stay visible and clickable */
+  const mpp=()=>156543.03*Math.cos(bounds.getCenter().lat*Math.PI/180)/Math.pow(2,map.getZoom());
+  function sun(lat,lon,rm,n,tip,dash){
+    const rpx=Math.max(8,rm/mpp()),r=rpx*mpp();
+    L.circle([lat,lon],{radius:r*1.25,stroke:false,fillColor:'#FFFFFF',fillOpacity:.6,interactive:false}).addTo(layer);
+    L.circle([lat,lon],{radius:r,color:'#B35900',weight:2,dashArray:dash||null,fillColor:'#FFC21A',fillOpacity:.92}).bindTooltip(tip,{sticky:true}).addTo(layer);
+    if(rpx>=13) L.marker([lat,lon],{interactive:false,icon:L.divIcon({className:'cnt',html:`<span style="font-size:${Math.max(11,Math.min(16,rpx*.7))}px">${n}</span>`,iconSize:[0,0]})}).addTo(layer);
+  }
   function draw(){
     layer.clearLayers();
-    const lvl=Math.max(0,Math.min(L_-1,Math.round(map.getZoom()-base))),Lv=c.levels[lvl]||{areas:[],other:c.installations};
-    const note=$('lnote');
-    if(anyAreas){
+    if(Lv.areas.length){
       const mx=Math.max(1,...Lv.areas.map(a=>a[3]));
-      Lv.areas.slice().sort((a,b)=>b[3]-a[3]).forEach(a=>{
-        const r=7+30*Math.sqrt(a[3]/mx);
-        L.circleMarker([a[0],a[1]],{radius:r,color:'#1A1412',weight:1.6,fillColor:'#F4A58A',fillOpacity:.82})
-         .bindTooltip(`<b>General area</b><br>${fmt(a[2])} installations<br>${fmt(a[3])} kW installed`,{sticky:true}).addTo(layer);
-      });
-      note.textContent=`Each circle is a general area, not a site location, and its size shows installed kW. Zoom in with the + button to see smaller areas. Areas with fewer than ${m.min_group} installations are not shown separately.`+(Lv.other?` ${fmt(Lv.other)} installations are counted in the totals but not drawn at this zoom (no map location, or in smaller areas).`:'');
+      Lv.areas.slice().sort((a,b)=>b[3]-a[3]).forEach(a=>sun(a[0],a[1],RMAXM*(.35+.65*Math.sqrt(a[3]/mx)),a[2],`<b>General area</b><br>${fmt(a[2])} installations<br>${fmt(a[3])} kW installed`));
+      note.textContent=`Each circle is a general area, not a site location. Circle size shows installed kW and the number is how many installations. Zoom in to see circles spread out. Areas with fewer than ${m.min_group} installations are not shown separately.`+(Lv.other?` ${fmt(Lv.other)} installations are counted in the totals but not drawn (no map location, or in smaller areas).`:'');
     } else {
-      const ctr=bounds.getCenter();
-      L.circleMarker(ctr,{radius:38,color:'#1A1412',weight:1.6,dashArray:'5 4',fillColor:'#F4A58A',fillOpacity:.6})
-       .bindTooltip(`<b>${name}</b><br>${fmt(c.installations)} installations<br>${fmt(c.kw)} kW installed<br>Shown at country level`,{sticky:true}).addTo(layer);
-      note.textContent=`Shown at country level, not at a site, to protect the privacy of the communities and sites we serve. Circle size is not to scale.`;
+      sun(bounds.getCenter().lat,bounds.getCenter().lng,34*mpp(),c.installations,`<b>${name}</b><br>${fmt(c.installations)} installations<br>${fmt(c.kw)} kW installed<br>Shown at country level`,'5 4');
+      note.textContent=`Shown at country level, not at a site, to protect the privacy of the communities and sites we serve.`;
     }
   }
   map.on('zoomend',draw); draw();
@@ -184,34 +185,27 @@ function mountMap(name){
 /* ---------- installs-over-time chart: rays of the sun, evenly spaced and aligned ---------- */
 function sunChart(){
   const pts=D.cumulative||[]; if(!pts.length) return '';
-  const avail=Math.min(1000,Math.max(300,($('app').clientWidth||900)-42)),W=avail;
-  const small=W<520;
-  const sunR=Math.max(18,Math.min(54,W*.055)),r=Math.max(17,Math.min(38,W*.037)),fs=Math.max(12,Math.min(22,r*.62));
-  const padR=12,padL=r+10,rayOut=sunR*2.05;
-  const sx=W-padR-rayOut,sy=rayOut+6;
-  const H=Math.round(small?W*1.0:W*.6),base=H-34,n=pts.length;
-  const x0=padL,y0=base-r-58;
-  const dx=sx-x0,dy=sy-y0,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len,gap=sunR*2.35+r*1.3;
-  const xl=sx-ux*gap;                                   // last circle sits on the line, clear of the rays
-  const px=i=>x0+(xl-x0)*i/(n-1),py=i=>y0+(px(i)-x0)*(dy/dx);
-  const nx=-uy,ny=ux,hw0=2,hw1=sunR*.75;                // beam half-widths at the start and at the sun
-  const bx0=x0-ux*r*1.2,by0=y0-uy*r*1.2;
+  const W=Math.min(1000,Math.max(300,($('app').clientWidth||900)-42)),n=pts.length,small=W<520;
+  const padX=12,dx=(W-2*padX)/n,max=Math.max(...pts.map(p=>p.total));
+  const rMax=Math.min(54,dx*.36),rMin=Math.max(11,Math.min(15,dx*.2));
+  const R=p=>rMin+(rMax-rMin)*Math.sqrt(p.total/max);     // sun size grows with installs
+  const H=Math.round(small?W*1.05:W*.58),base=H-34;
+  const xs=pts.map((p,i)=>padX+dx*(i+.5));
+  const top=rMax*1.6+8,low=base-rMin*1.6-52;
+  const ys=pts.map((p,i)=>low-(low-top)*i/(n-1));
   let o=`<svg class="sunchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Installations over time: ${pts.map(p=>fmt(p.total)+' by '+p.label).join(', ')}">`;
-  o+=`<defs><linearGradient id="bm" gradientUnits="userSpaceOnUse" x1="${bx0}" y1="${by0}" x2="${sx}" y2="${sy}"><stop offset="0" stop-color="var(--ray)" stop-opacity="0"/><stop offset="1" stop-color="var(--ray)" stop-opacity=".55"/></linearGradient>
-  <radialGradient id="sc" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFE680"/><stop offset=".6" stop-color="var(--ray)"/><stop offset="1" stop-color="var(--ray2)"/></radialGradient></defs>`;
-  o+=`<polygon points="${bx0+nx*hw0},${by0+ny*hw0} ${sx+nx*hw1},${sy+ny*hw1} ${sx-nx*hw1},${sy-ny*hw1} ${bx0-nx*hw0},${by0-ny*hw0}" fill="url(#bm)"/>`;
-  o+=`<line x1="${bx0}" y1="${by0}" x2="${sx}" y2="${sy}" stroke="var(--ray2)" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>`;
-  const rays=16,sw=Math.max(3,sunR*.12);
-  for(let i=0;i<rays;i++){const a=i/rays*2*Math.PI,l=i%2?sunR*1.62:sunR*1.9;
-    o+=`<line x1="${(sx+Math.cos(a)*sunR*1.38).toFixed(1)}" y1="${(sy+Math.sin(a)*sunR*1.38).toFixed(1)}" x2="${(sx+Math.cos(a)*l).toFixed(1)}" y2="${(sy+Math.sin(a)*l).toFixed(1)}" stroke="var(--ray)" stroke-width="${sw}" stroke-linecap="round"/>`}
-  o+=`<circle cx="${sx}" cy="${sy}" r="${sunR*1.18}" fill="none" stroke="var(--ray)" stroke-opacity=".45" stroke-width="${Math.max(2,sunR*.08)}"/><circle cx="${sx}" cy="${sy}" r="${sunR}" fill="url(#sc)"/>`;
-  const xa=x0-r,xb=W-padR;
-  o+=`<line x1="${xa}" y1="${base}" x2="${xb}" y2="${base}" stroke="var(--line)" stroke-width="1.5"/>`;
-  pts.forEach((p,i)=>{const x=px(i),y=py(i),lab=Math.max(11,fs*.62);
-    o+=`<line x1="${x}" y1="${y+r+lab+8}" x2="${x}" y2="${base}" stroke="var(--muted)" stroke-width="1" opacity=".6"/>`;
-    o+=`<circle cx="${x}" cy="${y}" r="${r}" fill="var(--dot)" stroke="var(--ray)" stroke-width="3"/><text x="${x}" y="${y+fs*.36}" text-anchor="middle" font-family="var(--head)" font-weight="800" font-size="${fs}" fill="var(--dot-ink)">${fmt(p.total)}</text>`;
-    o+=`<text x="${x}" y="${y+r+lab+2}" text-anchor="middle" font-size="${lab}" font-weight="600" fill="var(--ink)">${p.total===1?'install':'installs'}</text>`;
-    o+=`<text x="${x}" y="${base+22}" text-anchor="middle" font-family="var(--head)" font-weight="700" font-size="${Math.max(12,fs*.72)}" fill="var(--ink)">${p.label}</text>`;
+  o+=`<defs><radialGradient id="sc" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#FFE680"/><stop offset=".65" stop-color="var(--ray)"/><stop offset="1" stop-color="var(--ray2)"/></radialGradient></defs>`;
+  o+=`<line x1="${padX}" y1="${base}" x2="${W-padX}" y2="${base}" stroke="var(--line)" stroke-width="1.5"/>`;
+  o+=`<polyline points="${xs.map((x,i)=>x+','+ys[i]).join(' ')}" fill="none" stroke="var(--ray2)" stroke-opacity=".55" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>`;
+  pts.forEach((p,i)=>{const x=xs[i],y=ys[i],r=R(p),fs=Math.max(11,r*.78),lab=Math.max(11,Math.min(14,r*.5+6)),ry=r*1.62;
+    o+=`<line x1="${x}" y1="${y+ry+lab+8}" x2="${x}" y2="${base}" stroke="var(--muted)" stroke-width="1" opacity=".55"/>`;
+    const k=12,sw=Math.max(2,r*.13);
+    for(let j=0;j<k;j++){const a=j/k*2*Math.PI,l0=r*1.22,l1=j%2?r*1.5:r*1.68;
+      o+=`<line x1="${(x+Math.cos(a)*l0).toFixed(1)}" y1="${(y+Math.sin(a)*l0).toFixed(1)}" x2="${(x+Math.cos(a)*l1).toFixed(1)}" y2="${(y+Math.sin(a)*l1).toFixed(1)}" stroke="var(--ray)" stroke-width="${sw}" stroke-linecap="round"/>`}
+    o+=`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#sc)" stroke="var(--ray2)" stroke-width="${Math.max(1.5,r*.07)}"/>`;
+    o+=`<text x="${x}" y="${y+fs*.36}" text-anchor="middle" font-family="var(--head)" font-weight="800" font-size="${fs}" fill="#3A1D00">${fmt(p.total)}</text>`;
+    o+=`<text x="${x}" y="${y+ry+lab+1}" text-anchor="middle" font-size="${lab}" font-weight="600" fill="var(--ink)">${p.total===1?'install':'installs'}</text>`;
+    o+=`<text x="${x}" y="${base+22}" text-anchor="middle" font-family="var(--head)" font-weight="700" font-size="${Math.max(12,Math.min(16,dx*.2))}" fill="var(--ink)">${p.label}</text>`;
   });
   return o+'</svg>';
 }
@@ -232,7 +226,7 @@ function render(){
     ${isW?legend():'<button class="back" id="back">← Back to world map</button>'}
     <div class="country ${anim?'':'fade'}" style="${isW?'grid-template-columns:minmax(0,1fr)':''}"><div class="mapbox">${isW?worldSvg():'<div class="lmap" id="lmap"></div>'}</div>${isW?worldPanel():countryPanel(name)}</div>
   </section>
-  ${FULL?`<section class="card" aria-label="Growth in installations"><div class="card-head"><h2>Installations to date</h2></div><div id="sunwrap">${sunChart()}</div><p class="note">Each circle is the running total of installations on record by the end of that year (2026 is the year so far). Years in between with no installations are left out.</p></section>
+  ${FULL?`<section class="card" aria-label="Growth in installations"><div class="card-head"><h2>Installations to date</h2></div><div id="sunwrap">${sunChart()}</div><p class="note">Each sun is the running total of installations on record by the end of that year, and bigger suns mean more installations (2026 is the year so far). Years in between with no installations are left out.</p></section>
   <section class="card"><details><summary>View the numbers as a table</summary>${table()}</details></section>`:''}
   <p class="method">Generation is estimated at ${fmt(m.kwh_per_kw_year)} kWh per kW per year (PVWatts, Adjuntas, Puerto Rico). CO₂ avoided uses ${m.lbs_co2_per_kwh} lbs per kWh (EPA eGRID). Only installations with a confirmed system size are counted. To protect privacy, locations are shown as general areas and no names or addresses are shared.</p>`;
   document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>zoomTo(b.dataset.c));
